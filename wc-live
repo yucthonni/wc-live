@@ -2,10 +2,12 @@
 """
 wc-live: 命令行世界杯文字直播 🎯
 
-用法:
+main() 函数
   wc-live list          查看当日比赛列表
-  wc-live <序号>        进入指定比赛的文字直播（根据 list 显示的序号）
-  wc-live <saishi_id>   直接通过比赛 ID 进入文字直播
+  wc-live <序号>        进入文字直播（完整模式）
+  wc-live stealth <序号>  极简模式 — 单行覆盖更新，绝对隐蔽
+  wc-live <saishi_id>   直接通过比赛 ID 进入
+  wc-live stealth <id>  极简模式通过 ID 进入
   wc-live --help        显示帮助
 """
 
@@ -163,6 +165,96 @@ def show_match_list():
     console.print(f"\n[dim]共 {idx} 场比赛支持文字直播。运行 [bold]wc-live <序号>[/bold] 进入直播[/dim]")
 
 
+# ============ 极简模式 ============
+
+def stealth_mode(saishi_id: str):
+    """极简单行模式 — 只有一行文字在终端里覆盖更新，绝对隐蔽"""
+    server = _find_server(saishi_id)
+    if not server:
+        console.print("[red]❌ 无法连接直播服务器[/red]")
+        return
+
+    info = fetch_match_page(saishi_id)
+    home_team = info.get("home_team", "?")
+    away_team = info.get("away_team", "?")
+
+    # 进场时闪一下比赛信息，马上消失
+    sys.stdout.write(f"\r\033[K[wc] {home_team} vs {away_team} — 极简模式")
+    sys.stdout.flush()
+    time.sleep(1.5)
+
+    seen_ids = set()
+    last_text = ""
+    last_sid = 0
+
+    try:
+        # 初始加载
+        last_sid = get_max_sid(saishi_id, server)
+        all_init = []
+        for sid in range(0, last_sid + 1):
+            entries = get_live_texts(saishi_id, sid, server)
+            for e in entries:
+                if e.live_id not in seen_ids:
+                    seen_ids.add(e.live_id)
+                    all_init.append(e)
+            time.sleep(random.uniform(0.05, 0.1))
+
+        # 取最新的显示
+        if all_init:
+            all_init.sort(key=lambda x: x.live_sid)
+            last_text = _format_stealth(all_init[-1])
+
+        while True:
+            time.sleep(5 + random.uniform(0, 2))
+            current_max = get_max_sid(saishi_id, server)
+            if current_max > last_sid:
+                for sid in range(last_sid + 1, current_max + 1):
+                    entries = get_live_texts(saishi_id, sid, server)
+                    for e in entries:
+                        if e.live_id not in seen_ids:
+                            seen_ids.add(e.live_id)
+                            last_text = _format_stealth(e)
+                    time.sleep(random.uniform(0.05, 0.1))
+                last_sid = current_max
+
+            # 单行覆盖
+            if last_text:
+                sys.stdout.write(f"\r\033[K{last_text}")
+            else:
+                now = datetime.now().strftime("%H:%M")
+                sys.stdout.write(f"\r\033[K[{now}] ⏳ 等待比赛更新...")
+            sys.stdout.flush()
+
+    except KeyboardInterrupt:
+        sys.stdout.write(f"\r\033[K[wc] 直播退出\033[K\n")
+        sys.stdout.flush()
+
+
+def _format_stealth(entry: LiveTextEntry) -> str:
+    """极简单行格式 — 干净、紧凑"""
+    icon = ""
+    if entry.event:
+        if "goal" in entry.event:
+            icon = "⚽"
+        elif "red" in entry.event:
+            icon = "🟥"
+        elif "yellow" in entry.event:
+            icon = "🟨"
+
+    time_str = entry.live_time[-5:] if len(entry.live_time) >= 5 else ""
+
+    text = entry.live_text.strip()
+    # 截短过长内容
+    if len(text) > 80:
+        text = text[:77] + "..."
+
+    score = ""
+    if entry.home_score or entry.visit_score:
+        score = f" {entry.home_score or '0'}-{entry.visit_score or '0'}"
+
+    return f"[{time_str}]{icon}{score} {text}"
+
+
 # ============ 文字直播模式 ============
 
 def live_mode(saishi_id: str):
@@ -256,6 +348,31 @@ def main():
         print(__doc__)
         return
 
+    # 极简模式
+    if args[0] in ("stealth", "-s"):
+        if len(args) < 2:
+            console.print("[red]❌ 用法: wc-live stealth <序号|saishi_id>[/red]")
+            return
+        target = args[1]
+        if target.isdigit():
+            if len(target) > 5:
+                stealth_mode(target)
+            else:
+                matches = fetch_todays_matches()
+                text_matches = [m for m in matches if m.get("has_text_live")]
+                idx = int(target) - 1
+                if 0 <= idx < len(text_matches):
+                    stealth_mode(text_matches[idx]["saishi_id"])
+                else:
+                    console.print(f"[red]❌ 序号 {target} 超出范围[/red]")
+        else:
+            m = re.search(r"match(\d+)v\.htm", target)
+            if m:
+                stealth_mode(m.group(1))
+            else:
+                console.print(f"[red]❌ 无效参数: {target}[/red]")
+        return
+
     if args[0] == "list":
         show_match_list()
         return
@@ -264,10 +381,8 @@ def main():
 
     if arg.isdigit():
         if len(arg) > 5:
-            # 直接作为 saishi_id
             live_mode(arg)
         else:
-            # 作为序号
             matches = fetch_todays_matches()
             text_matches = [m for m in matches if m.get("has_text_live")]
             idx = int(arg) - 1
