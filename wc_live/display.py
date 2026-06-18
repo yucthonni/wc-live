@@ -60,8 +60,11 @@ def format_live_text(entry: LiveTextEntry, use_icons: bool = True) -> Text:
     parts = []
 
     # 时间
+    # 优先用比赛时间，否则用wall time
     time_str = ""
-    if entry.live_time:
+    if entry.live_ptime:
+        time_str = entry.live_ptime
+    elif entry.live_time:
         try:
             dt = datetime.strptime(entry.live_time, "%Y-%m-%d %H:%M:%S")
             time_str = dt.strftime("%H:%M")

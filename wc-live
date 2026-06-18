@@ -347,7 +347,13 @@ def _format_stealth(entry: LiveTextEntry) -> str:
         elif "yellow" in entry.event:
             icon = "🟨"
 
-    time_str = entry.live_time[-5:] if len(entry.live_time) >= 5 else ""
+    # 优先用比赛时间
+    if entry.live_ptime:
+        time_str = entry.live_ptime
+    elif entry.live_time:
+        time_str = entry.live_time[-5:] if len(entry.live_time) >= 5 else ""
+    else:
+        time_str = ""
 
     text = entry.live_text.strip()
     # 截短过长内容

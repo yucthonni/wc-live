@@ -54,6 +54,7 @@ class LiveTextEntry:
     text_url: str = ""       # 关联新闻链接
     img_url: str = ""        # 图片链接
     text_bold: bool = False  # 是否加粗
+    live_ptime: str = ""     # 比赛时间（如 57'24''）
 
 
 # ---------- 匹配列表采集 ----------
@@ -254,6 +255,7 @@ def get_live_texts(saishi_id: str, sid: int, server: str = "dingshi4pc") -> list
             text_url=item.get("text_url", ""),
             img_url=item.get("img_url", ""),
             text_bold=item.get("text_bold", False),
+            live_ptime=item.get("live_ptime", ""),
         ))
     return entries
 
