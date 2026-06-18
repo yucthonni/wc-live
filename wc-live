@@ -436,12 +436,9 @@ def live_mode(saishi_id: str):
                 if e.live_id not in seen_ids:
                     seen_ids.add(e.live_id)
                     all_entries.append(e)
+                    # 每条实时打印，不等加载完
+                    console.print(format_live_text(e))
             time.sleep(random.uniform(0.1, 0.2))
-
-        # 显示已有内容
-        all_entries.sort(key=lambda e: e.live_sid)
-        for entry in all_entries:
-            console.print(format_live_text(entry))
 
         console.print(f"\n[dim]已加载 {len(all_entries)} 条，进入自动刷新模式 (按 Ctrl+C 退出)[/dim]\n")
 
