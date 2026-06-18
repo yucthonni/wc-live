@@ -1,0 +1,43 @@
+{
+  "name": "wc-live",
+  "displayName": "WC Live - World Cup Live Text",
+  "description": "显示世界杯文字直播到 VS Code 状态栏",
+  "version": "0.0.1",
+  "publisher": "yucthon",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "wc-live.refresh",
+        "title": "WC Live: 刷新"
+      },
+      {
+        "command": "wc-live.switch",
+        "title": "WC Live: 切换比赛"
+      },
+      {
+        "command": "wc-live.openCli",
+        "title": "WC Live: 打开终端运行 wc-live"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -10,7 +10,6 @@ build/
 venv/
 
 # Editor
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -21,3 +20,6 @@ Thumbs.db
 
 # Backup
 *.bak
+out/
+node_modules/
+vscode/node_modules/
