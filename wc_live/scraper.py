@@ -310,6 +310,67 @@ def poll_live_text(saishi_id: str, server: str = "dingshi4pc",
 
 # ---------- 辅助 ----------
 
+def get_match_status(saishi_id: str, server: str = "dingshi4pc") -> dict:
+    """检测比赛状态"""
+    status = {
+        "status": "unknown",
+        "status_text": "未知",
+        "score": "",
+        "period": "",
+    }
+    
+    # 获取最新数据
+    max_sid = get_max_sid(saishi_id, server)
+    if max_sid == 0:
+        status["status"] = "not_started"
+        status["status_text"] = "⏳ 未开赛"
+        return status
+    
+    entries = get_live_texts(saishi_id, max_sid, server)
+    if not entries:
+        status["status"] = "not_started"
+        status["status_text"] = "⏳ 未开赛"
+        return status
+    
+    latest = entries[-1]
+    
+    # 检查 pid_text 字段
+    pid_text = latest.pid_text.lower() if latest.pid_text else ""
+    
+    if "中场" in pid_text or "半场" in pid_text:
+        status["status"] = "halftime"
+        status["status_text"] = "⏸️ 中场休息"
+    elif "结束" in pid_text or "完赛" in pid_text or "终场" in pid_text:
+        status["status"] = "finished"
+        status["status_text"] = "🏁 已结束"
+    elif "未赛" in pid_text or "赛前" in pid_text:
+        status["status"] = "not_started"
+        status["status_text"] = "⏳ 未开赛"
+    elif "进行" in pid_text or "上半" in pid_text or "下半" in pid_text:
+        status["status"] = "live"
+        status["status_text"] = "🔴 进行中"
+    else:
+        # 根据时间判断
+        status["status"] = "live"
+        status["status_text"] = "🔴 进行中"
+    
+    # 比分
+    if latest.home_score or latest.visit_score:
+        status["score"] = f"{latest.home_score or '0'} - {latest.visit_score or '0'}"
+    
+    # 半场信息
+    if "上半" in pid_text:
+        status["period"] = "上半场"
+    elif "下半" in pid_text:
+        status["period"] = "下半场"
+    elif "加时" in pid_text:
+        status["period"] = "加时赛"
+    elif "点球" in pid_text:
+        status["period"] = "点球大战"
+    
+    return status
+
+
 def get_current_matches() -> list[MatchInfo]:
     """获取当前正在进行的世界杯比赛"""
     url = "https://www.zhibo8.com/"

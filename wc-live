@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wc_live.scraper import (
     MatchInfo, LiveTextEntry, fetch_match_page,
     get_max_sid, get_live_texts, _find_server,
+    get_match_status,
 )
 from wc_live.display import (
     format_live_text, render_match_header,
@@ -270,10 +271,22 @@ def stealth_mode(saishi_id: str):
     home_team = info.get("home_team", "?")
     away_team = info.get("away_team", "?")
 
+    # 获取比赛状态
+    match_status = get_match_status(saishi_id, server)
+    status_emoji = {
+        "live": "🔴",
+        "halftime": "⏸️",
+        "finished": "🏁",
+        "not_started": "⏳",
+    }.get(match_status["status"], "❓")
+    
     # 进场时闪一下比赛信息，马上消失
-    sys.stdout.write(f"\r\033[K[wc] {home_team} vs {away_team} — 极简模式")
+    status_text = f"{status_emoji} {match_status['status_text']}"
+    if match_status['score']:
+        status_text += f" {match_status['score']}"
+    sys.stdout.write(f"\r\033[K[wc] {home_team} vs {away_team} | {status_text}")
     sys.stdout.flush()
-    time.sleep(1.5)
+    time.sleep(2)
 
     seen_ids = set()
     last_text = ""
@@ -347,6 +360,9 @@ def _format_stealth(entry: LiveTextEntry) -> str:
     return f"[{time_str}]{icon}{score} {text}"
 
 
+# ============ 状态检测 ============
+
+
 # ============ 文字直播模式 ============
 
 def live_mode(saishi_id: str):
@@ -363,9 +379,19 @@ def live_mode(saishi_id: str):
     home_team = info.get("home_team", "?")
     away_team = info.get("away_team", "?")
 
+    # 获取比赛状态
+    match_status = get_match_status(saishi_id, server)
+
     console.clear()
 
-    # 打印头部
+    # 打印头部（含状态）
+    status_style = {
+        "live": "bold red",
+        "halftime": "bold yellow",
+        "finished": "dim",
+        "not_started": "bold cyan",
+    }.get(match_status["status"], "dim")
+    
     header = Panel(
         Text.assemble(
             (f"{home_team} ", "bold cyan"),
@@ -374,12 +400,25 @@ def live_mode(saishi_id: str):
             ("\n", ""),
             (f"📅 {info.get('match_time','')} | ", "dim"),
             (f"🆔 {saishi_id}", "dim"),
+            (f"\n{match_status['status_text']}", status_style),
+            (f" {match_status['score']}" if match_status['score'] else "", "bold"),
+            (f" | {match_status['period']}" if match_status['period'] else "", "dim"),
         ),
         title="🎯 文字直播",
         border_style="green",
         box=box.DOUBLE,
     )
     console.print(header)
+
+    # 如果比赛未开始或已结束，提示用户
+    if match_status["status"] == "not_started":
+        console.print("\n[yellow]⏳ 比赛尚未开始，等待中...[/yellow]")
+        console.print("[dim]将自动检测比赛开始，按 Ctrl+C 退出[/dim]\n")
+    elif match_status["status"] == "finished":
+        console.print("\n[yellow]🏁 比赛已结束，显示历史记录[/yellow]\n")
+    elif match_status["status"] == "halftime":
+        console.print("\n[yellow]⏸️ 中场休息中...[/yellow]")
+        console.print("[dim]将自动检测下半场比赛开始[/dim]\n")
 
     # 初始加载
     seen_ids = set()
