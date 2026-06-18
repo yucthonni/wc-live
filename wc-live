@@ -2,12 +2,12 @@
 """
 wc-live: 命令行世界杯文字直播 🎯
 
-main() 函数
+用法:
   wc-live list          查看当日比赛列表
   wc-live <序号>        进入文字直播（完整模式）
   wc-live stealth <序号>  极简模式 — 单行覆盖更新，绝对隐蔽
+  wc-live debug <序号>   调试模式 — 输出详细的诊断信息
   wc-live <saishi_id>   直接通过比赛 ID 进入
-  wc-live stealth <id>  极简模式通过 ID 进入
   wc-live --help        显示帮助
 """
 
@@ -163,6 +163,98 @@ def show_match_list():
 
     console.print(table)
     console.print(f"\n[dim]共 {idx} 场比赛支持文字直播。运行 [bold]wc-live <序号>[/bold] 进入直播[/dim]")
+
+
+# ============ Debug 模式 ============
+
+def debug_mode(saishi_id: str):
+    """调试模式 — 输出详细的诊断信息"""
+    console.print("[bold yellow]🔧 Debug 模式[/bold yellow]\n")
+
+    # 1. 测试服务器连接
+    console.print("[bold]1. 测试服务器连接[/bold]")
+    for sv in ["dingshi4pc", "dingshi145", "dingshia", "dingshib", "dingshic", "dingshid", "dingshie"]:
+        url = f"https://{sv}.qiumibao.com/livetext/data/cache/livetext/{saishi_id}/0/max_sid.json"
+        try:
+            resp = requests.get(url, timeout=5)
+            status = "✅" if resp.status_code == 200 else f"❌ {resp.status_code}"
+            console.print(f"  {sv}: {status}")
+            if resp.status_code == 200:
+                try:
+                    data = resp.json()
+                    console.print(f"    max_sid = {data.get('max_sid', 'N/A')}")
+                except:
+                    console.print(f"    ⚠️ JSON解析失败: {resp.text[:100]}")
+        except Exception as e:
+            console.print(f"  {sv}: ❌ {e}")
+    
+    console.print()
+
+    # 2. 查找可用服务器
+    console.print("[bold]2. 查找可用服务器[/bold]")
+    server = _find_server(saishi_id)
+    if server:
+        console.print(f"  ✅ 找到服务器: {server}")
+    else:
+        console.print("  ❌ 未找到可用服务器")
+        return
+    
+    console.print()
+
+    # 3. 获取比赛信息
+    console.print("[bold]3. 获取比赛信息[/bold]")
+    info = fetch_match_page(saishi_id)
+    if info:
+        for k, v in info.items():
+            console.print(f"  {k}: {v}")
+    else:
+        console.print("  ⚠️ 无法获取比赛信息")
+    
+    console.print()
+
+    # 4. 测试文字直播API
+    console.print("[bold]4. 测试文字直播API[/bold]")
+    max_sid = get_max_sid(saishi_id, server)
+    console.print(f"  max_sid = {max_sid}")
+    
+    if max_sid > 0:
+        console.print(f"\n  [bold]获取最新文字直播 (sid={max_sid}):[/bold]")
+        url_id = int(max_sid / 2) * 2
+        api_url = f"https://{server}.qiumibao.com/livetext/data/cache/livetext/{saishi_id}/0/lit_page_2/{url_id}.htm"
+        console.print(f"  URL: {api_url}")
+        
+        try:
+            resp = requests.get(api_url, timeout=10)
+            console.print(f"  状态码: {resp.status_code}")
+            console.print(f"  响应长度: {len(resp.text)} bytes")
+            
+            if resp.status_code == 200:
+                try:
+                    data = resp.json()
+                    console.print(f"  数据条数: {len(data)}")
+                    if data:
+                        console.print(f"\n  [bold]第一条数据:[/bold]")
+                        for k, v in data[0].items():
+                            console.print(f"    {k}: {v}")
+                except Exception as e:
+                    console.print(f"  ❌ JSON解析失败: {e}")
+                    console.print(f"  响应内容: {resp.text[:200]}")
+        except Exception as e:
+            console.print(f"  ❌ 请求失败: {e}")
+    else:
+        console.print("  ⚠️ max_sid=0，可能比赛尚未开始或已结束")
+    
+    console.print()
+
+    # 5. 测试文字直播获取
+    console.print("[bold]5. 测试 get_live_texts 函数[/bold]")
+    entries = get_live_texts(saishi_id, max_sid, server) if max_sid > 0 else []
+    console.print(f"  返回 {len(entries)} 条")
+    for e in entries[:3]:
+        console.print(f"    [{e.live_time}] {e.live_text[:50]}")
+    
+    console.print()
+    console.print("[dim]Debug 信息输出完毕[/dim]")
 
 
 # ============ 极简模式 ============
@@ -346,6 +438,31 @@ def main():
 
     if not args or args[0] in ("-h", "--help", "help"):
         print(__doc__)
+        return
+
+    # Debug 模式
+    if args[0] in ("debug", "-d"):
+        if len(args) < 2:
+            console.print("[red]❌ 用法: wc-live debug <序号|saishi_id>[/red]")
+            return
+        target = args[1]
+        if target.isdigit():
+            if len(target) > 5:
+                debug_mode(target)
+            else:
+                matches = fetch_todays_matches()
+                text_matches = [m for m in matches if m.get("has_text_live")]
+                idx = int(target) - 1
+                if 0 <= idx < len(text_matches):
+                    debug_mode(text_matches[idx]["saishi_id"])
+                else:
+                    console.print(f"[red]❌ 序号 {target} 超出范围[/red]")
+        else:
+            m = re.search(r"match(\d+)v\.htm", target)
+            if m:
+                debug_mode(m.group(1))
+            else:
+                console.print(f"[red]❌ 无效参数: {target}[/red]")
         return
 
     # 极简模式
