@@ -8,6 +8,7 @@ wc-live: 命令行世界杯文字直播 🎯
   wc-live stealth <序号>  极简模式 — 单行覆盖更新，绝对隐蔽
   wc-live debug <序号>   调试模式 — 输出详细的诊断信息
   wc-live <saishi_id>   直接通过比赛 ID 进入
+  wc-live menu <cmd>    菜单栏插件管理 (set/start/stop/status)
   wc-live --help        显示帮助
 """
 
@@ -39,6 +40,7 @@ from rich.panel import Panel
 from rich.text import Text
 from rich import box
 from datetime import datetime
+from pathlib import Path
 
 
 console = Console()
@@ -476,6 +478,65 @@ def live_mode(saishi_id: str):
         console.print(f"[dim]本场共加载 {len(all_entries)} 条文字直播[/dim]")
 
 
+CONFIG_FILE = Path.home() / ".wc-live.json"
+SWIFTBAR_SCRIPT = Path(__file__).parent / "swiftbar" / "wc-live.10s.py"
+
+
+def menu_command(args: list):
+    """菜单栏插件管理"""
+    if not args or args[0] == "status":
+        # 显示当前配置
+        if CONFIG_FILE.exists():
+            cfg = json.loads(CONFIG_FILE.read_text())
+            sid = cfg.get("saishi_id", "")
+            if sid:
+                info = fetch_match_page(sid)
+                home = info.get("home_team", "?")
+                away = info.get("away_team", "?")
+                console.print(f"[green]✅ 菜单栏已启用[/green]")
+                console.print(f"   比赛: {home} vs {away} ({sid})")
+            else:
+                console.print("[yellow]⚠️ 配置文件存在但未设置比赛[/yellow]")
+        else:
+            console.print("[dim]菜单栏未配置[/dim]")
+            console.print("[dim]运行 'wc-live menu set <序号>' 启用[/dim]")
+        return
+
+    if args[0] == "set":
+        if len(args) < 2:
+            console.print("[red]❌ 用法: wc-live menu set <序号|saishi_id>[/red]")
+            return
+        target = args[1]
+        if target.isdigit() and len(target) <= 5:
+            matches = fetch_todays_matches()
+            text_matches = [m for m in matches if m.get("has_text_live")]
+            idx = int(target) - 1
+            if 0 <= idx < len(text_matches):
+                sid = text_matches[idx]["saishi_id"]
+            else:
+                console.print(f"[red]❌ 序号 {target} 超出范围[/red]")
+                return
+        else:
+            sid = target
+
+        CONFIG_FILE.write_text(json.dumps({"saishi_id": sid}, indent=2))
+        info = fetch_match_page(sid)
+        home = info.get("home_team", "?")
+        away = info.get("away_team", "?")
+        console.print(f"[green]✅ 已设置菜单栏比赛: {home} vs {away}[/green]")
+        console.print("[dim]确保 SwiftBar 已启动且 Plugin Folder 包含本项目 swiftbar/ 目录[/dim]")
+        return
+
+    if args[0] == "off":
+        if CONFIG_FILE.exists():
+            CONFIG_FILE.unlink()
+        console.print("[dim]菜单栏已关闭[/dim]")
+        return
+
+    console.print(f"[red]❌ 未知命令: {args[0]}[/red]")
+    console.print("[dim]可用: set <序号> | status | off[/dim]")
+
+
 # ============ 入口 ============
 
 def main():
@@ -483,6 +544,11 @@ def main():
 
     if not args or args[0] in ("-h", "--help", "help"):
         print(__doc__)
+        return
+
+    # 菜单栏插件管理
+    if args[0] == "menu":
+        menu_command(args[1:] if len(args) > 1 else [])
         return
 
     # Debug 模式
