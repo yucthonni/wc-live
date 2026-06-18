@@ -293,10 +293,11 @@ def stealth_mode(saishi_id: str):
     last_sid = 0
 
     try:
-        # 初始加载
+        # 初始加载（只加载最近几页）
         last_sid = get_max_sid(saishi_id, server)
         all_init = []
-        for sid in range(0, last_sid + 1):
+        start_sid = max(0, last_sid - 20)
+        for sid in range(start_sid, last_sid + 1):
             entries = get_live_texts(saishi_id, sid, server)
             for e in entries:
                 if e.live_id not in seen_ids:
@@ -420,20 +421,22 @@ def live_mode(saishi_id: str):
         console.print("\n[yellow]⏸️ 中场休息中...[/yellow]")
         console.print("[dim]将自动检测下半场比赛开始[/dim]\n")
 
-    # 初始加载
+    # 初始加载（只加载最近几页，不从第0页开始）
     seen_ids = set()
     all_entries = []
     last_sid = 0
 
     try:
         last_sid = get_max_sid(saishi_id, server)
-        for sid in range(0, last_sid + 1):
+        # 只加载最近20页，避免初始加载太慢
+        start_sid = max(0, last_sid - 20)
+        for sid in range(start_sid, last_sid + 1):
             entries = get_live_texts(saishi_id, sid, server)
             for e in entries:
                 if e.live_id not in seen_ids:
                     seen_ids.add(e.live_id)
                     all_entries.append(e)
-            time.sleep(random.uniform(0.1, 0.3))
+            time.sleep(random.uniform(0.1, 0.2))
 
         # 显示已有内容
         all_entries.sort(key=lambda e: e.live_sid)
